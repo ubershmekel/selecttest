@@ -28,6 +28,15 @@ void FreeSocketInformation(DWORD Index);
 DWORD TotalSockets = 0;
 LPSOCKET_INFORMATION SocketArray[FD_SETSIZE];
 
+double get_time()
+{
+    // http://stackoverflow.com/questions/2349776/how-can-i-benchmark-c-code-easily
+    LARGE_INTEGER t, f;
+    QueryPerformanceCounter(&t);
+    QueryPerformanceFrequency(&f);
+    return (double)t.QuadPart / (double)f.QuadPart;
+}
+
 int main(int argc, char **argv)
 {
     SOCKET ListenSocket;
@@ -93,8 +102,19 @@ int main(int argc, char **argv)
     else
         printf("ioctlsocket() is OK!\n");
 
+    int count = 0;
+    double start = get_time();
+    int cycle = 1000000;
     while (TRUE)
     {
+        count++;
+        if (count > cycle) {
+            count = 0;
+            double duration = get_time() - start;
+            printf("Duration: %g\n", duration);
+            start = get_time();
+        }
+
         // Prepare the Read and Write socket sets for network I/O notification
         FD_ZERO(&ReadSet);
         FD_ZERO(&WriteSet);
@@ -111,18 +131,19 @@ int main(int argc, char **argv)
             else
                 FD_SET(SocketArray[i]->Socket, &ReadSet);
 
-        printf("calling `select`\n");
+        //printf("calling `select`\n");
         struct timeval tv;
         tv.tv_sec = 0;
         tv.tv_usec = 0;
 
         if ((readyHandles = select(0, &ReadSet, &WriteSet, NULL, &tv)) == SOCKET_ERROR)
         {
-            printf("select() returned with error %d\n", WSAGetLastError());
+            //printf("select() returned with error %d\n", WSAGetLastError());
             return 1;
         }
-        else
-            printf("select() is OK!\n");
+        else {
+            //printf("select() is OK!\n");
+        }
 
         // Check for arriving connections on the listening socket.
         if (FD_ISSET(ListenSocket, &ReadSet))
