@@ -9,7 +9,7 @@
 #include <stdio.h>
 #include <vector>
 
-#define PORT 5150
+#define PORT 15150
 #define DATA_BUFSIZE 8192
 
 typedef struct _SOCKET_INFORMATION {
@@ -38,8 +38,7 @@ double get_time()
     return (double)t.QuadPart / (double)f.QuadPart;
 }
 
-int main(int argc, char **argv)
-{
+int SelectCallsPerSecond(int socketCount) {
     SOCKET AcceptSocket;
     SOCKADDR_IN InternetAddr;
     WSADATA wsaData;
@@ -53,7 +52,6 @@ int main(int argc, char **argv)
     DWORD SendBytes;
     DWORD RecvBytes;
 
-    const int c_socketCount = 1;
     std::vector<SOCKET> sockets;
 
     if ((Ret = WSAStartup(0x0202, &wsaData)) != 0)
@@ -66,7 +64,7 @@ int main(int argc, char **argv)
         printf("WSAStartup() is fine!\n");
 
     // Prepare a socket to listen for connections
-    for (int index = 0; index < c_socketCount; index++) {
+    for (int index = 0; index < socketCount; index++) {
         SOCKET ListenSocket;
         if ((ListenSocket = WSASocket(AF_INET, SOCK_STREAM, 0, NULL, 0, WSA_FLAG_OVERLAPPED)) == INVALID_SOCKET)
         {
@@ -74,7 +72,7 @@ int main(int argc, char **argv)
             return 1;
         }
         else {
-            printf("WSASocket() is OK!\n");
+            //printf("WSASocket() is OK!\n");
         }
 
         InternetAddr.sin_family = AF_INET;
@@ -86,16 +84,18 @@ int main(int argc, char **argv)
             printf("bind() failed with error %d\n", WSAGetLastError());
             return 1;
         }
-        else
-            printf("bind() is OK!\n");
+        else {
+            //printf("bind() is OK!\n");
+        }
 
         if (listen(ListenSocket, 5))
         {
             printf("listen() failed with error %d\n", WSAGetLastError());
             return 1;
         }
-        else
-            printf("listen() is OK!\n");
+        else {
+            //printf("listen() is OK!\n");
+        }
 
         // Change the socket mode on the listening socket from blocking to
         // non-block so the application will not block waiting for requests
@@ -113,7 +113,7 @@ int main(int argc, char **argv)
 
     int selectCallCount = 0;
     double start = get_time();
-    int cycle = 10000;
+    int cycle = 100;
     while (TRUE)
     {
         selectCallCount++;
@@ -122,12 +122,14 @@ int main(int argc, char **argv)
             double duration = get_time() - start;
             printf("Duration: %g\nFor count in cycle: %d\n", duration, cycle);
 
-            // slow down or speed up measuring cycle
-            if (duration < 0.9) {
-                cycle = cycle * 1.1;
-            }
-            if (duration > 1.1) {
-                cycle = cycle / 1.1;
+            // slow down or speed up measuring cycle to reach 1 second duration
+            if (duration < 0.95) {
+                cycle = static_cast<int>(cycle * 1.1);
+            } else if (duration > 1.05) {
+                cycle = static_cast<int>(cycle / 1.1);
+            } else {
+                // the duration is about 1 second. return the cycle count
+                return cycle;
             }
             start = get_time();
         }
@@ -180,8 +182,9 @@ int main(int argc, char **argv)
                         printf("ioctlsocket(FIONBIO) failed with error %d\n", WSAGetLastError());
                         return 1;
                     }
-                    else
+                    else {
                         printf("ioctlsocket(FIONBIO) is OK!\n");
+                    }
 
                     if (CreateSocketInformation(AcceptSocket) == FALSE)
                     {
@@ -321,4 +324,15 @@ void FreeSocketInformation(DWORD Index)
     }
 
     TotalSockets--;
+}
+
+
+int main(int argc, char **argv)
+{
+    printf("Usage: SocketTest.exe [socket count]\n");
+    int socketCount = atoi(argv[1]);
+    printf("Measuring with this many sockets: %d", socketCount);
+    int cycles = SelectCallsPerSecond(socketCount);
+    printf("\nCycles for 1 second duration: %d\n", cycles);
+    return cycles;
 }
