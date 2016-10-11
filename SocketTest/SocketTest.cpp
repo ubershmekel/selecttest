@@ -7,6 +7,7 @@
 #include <winsock2.h>
 #include <windows.h>
 #include <stdio.h>
+#include <vector>
 
 #define PORT 5150
 #define DATA_BUFSIZE 8192
@@ -39,7 +40,6 @@ double get_time()
 
 int main(int argc, char **argv)
 {
-    SOCKET ListenSocket;
     SOCKET AcceptSocket;
     SOCKADDR_IN InternetAddr;
     WSADATA wsaData;
@@ -53,6 +53,9 @@ int main(int argc, char **argv)
     DWORD SendBytes;
     DWORD RecvBytes;
 
+    const int c_socketCount = 1;
+    std::vector<SOCKET> sockets;
+
     if ((Ret = WSAStartup(0x0202, &wsaData)) != 0)
     {
         printf("WSAStartup() failed with error %d\n", Ret);
@@ -63,55 +66,69 @@ int main(int argc, char **argv)
         printf("WSAStartup() is fine!\n");
 
     // Prepare a socket to listen for connections
-    if ((ListenSocket = WSASocket(AF_INET, SOCK_STREAM, 0, NULL, 0, WSA_FLAG_OVERLAPPED)) == INVALID_SOCKET)
-    {
-        printf("WSASocket() failed with error %d\n", WSAGetLastError());
-        return 1;
+    for (int index = 0; index < c_socketCount; index++) {
+        SOCKET ListenSocket;
+        if ((ListenSocket = WSASocket(AF_INET, SOCK_STREAM, 0, NULL, 0, WSA_FLAG_OVERLAPPED)) == INVALID_SOCKET)
+        {
+            printf("WSASocket() failed with error %d\n", WSAGetLastError());
+            return 1;
+        }
+        else {
+            printf("WSASocket() is OK!\n");
+        }
+
+        InternetAddr.sin_family = AF_INET;
+        InternetAddr.sin_addr.s_addr = htonl(INADDR_ANY);
+        InternetAddr.sin_port = htons(PORT + index);
+
+        if (bind(ListenSocket, (PSOCKADDR)&InternetAddr, sizeof(InternetAddr)) == SOCKET_ERROR)
+        {
+            printf("bind() failed with error %d\n", WSAGetLastError());
+            return 1;
+        }
+        else
+            printf("bind() is OK!\n");
+
+        if (listen(ListenSocket, 5))
+        {
+            printf("listen() failed with error %d\n", WSAGetLastError());
+            return 1;
+        }
+        else
+            printf("listen() is OK!\n");
+
+        // Change the socket mode on the listening socket from blocking to
+        // non-block so the application will not block waiting for requests
+        NonBlock = 1;
+        if (ioctlsocket(ListenSocket, FIONBIO, &NonBlock) == SOCKET_ERROR)
+        {
+            printf("ioctlsocket() failed with error %d\n", WSAGetLastError());
+            return 1;
+        }
+        else
+            printf("ioctlsocket() is OK!\n");
+
+        sockets.push_back(ListenSocket);
     }
-    else
-        printf("WSASocket() is OK!\n");
 
-    InternetAddr.sin_family = AF_INET;
-    InternetAddr.sin_addr.s_addr = htonl(INADDR_ANY);
-    InternetAddr.sin_port = htons(PORT);
-
-    if (bind(ListenSocket, (PSOCKADDR)&InternetAddr, sizeof(InternetAddr)) == SOCKET_ERROR)
-    {
-        printf("bind() failed with error %d\n", WSAGetLastError());
-        return 1;
-    }
-    else
-        printf("bind() is OK!\n");
-
-    if (listen(ListenSocket, 5))
-    {
-        printf("listen() failed with error %d\n", WSAGetLastError());
-        return 1;
-    }
-    else
-        printf("listen() is OK!\n");
-
-    // Change the socket mode on the listening socket from blocking to
-    // non-block so the application will not block waiting for requests
-    NonBlock = 1;
-    if (ioctlsocket(ListenSocket, FIONBIO, &NonBlock) == SOCKET_ERROR)
-    {
-        printf("ioctlsocket() failed with error %d\n", WSAGetLastError());
-        return 1;
-    }
-    else
-        printf("ioctlsocket() is OK!\n");
-
-    int count = 0;
+    int selectCallCount = 0;
     double start = get_time();
-    int cycle = 1000000;
+    int cycle = 10000;
     while (TRUE)
     {
-        count++;
-        if (count > cycle) {
-            count = 0;
+        selectCallCount++;
+        if (selectCallCount > cycle) {
+            selectCallCount = 0;
             double duration = get_time() - start;
-            printf("Duration: %g\n", duration);
+            printf("Duration: %g\nFor count in cycle: %d\n", duration, cycle);
+
+            // slow down or speed up measuring cycle
+            if (duration < 0.9) {
+                cycle = cycle * 1.1;
+            }
+            if (duration > 1.1) {
+                cycle = cycle / 1.1;
+            }
             start = get_time();
         }
 
@@ -120,16 +137,19 @@ int main(int argc, char **argv)
         FD_ZERO(&WriteSet);
 
         // Always look for connection attempts
-        FD_SET(ListenSocket, &ReadSet);
+        for (const auto& sock : sockets) {
+            FD_SET(sock, &ReadSet);
+        }
 
         // Set Read and Write notification for each socket based on the
         // current state the buffer.  If there is data remaining in the
         // buffer then set the Write set otherwise the Read set
-        for (i = 0; i < TotalSockets; i++)
+        for (i = 0; i < TotalSockets; i++) {
             if (SocketArray[i]->BytesRECV > SocketArray[i]->BytesSEND)
                 FD_SET(SocketArray[i]->Socket, &WriteSet);
             else
                 FD_SET(SocketArray[i]->Socket, &ReadSet);
+        }
 
         //printf("calling `select`\n");
         struct timeval tv;
@@ -146,40 +166,42 @@ int main(int argc, char **argv)
         }
 
         // Check for arriving connections on the listening socket.
-        if (FD_ISSET(ListenSocket, &ReadSet))
-        {
-            readyHandles--;
-            if ((AcceptSocket = accept(ListenSocket, NULL, NULL)) != INVALID_SOCKET)
+        for (const auto& sockToAccept : sockets) {
+            if (FD_ISSET(sockToAccept, &ReadSet))
             {
-                // Set the accepted socket to non-blocking mode so the server will
-                // not get caught in a blocked condition on WSASends
-                NonBlock = 1;
-                if (ioctlsocket(AcceptSocket, FIONBIO, &NonBlock) == SOCKET_ERROR)
+                readyHandles--;
+                if ((AcceptSocket = accept(sockToAccept, NULL, NULL)) != INVALID_SOCKET)
                 {
-                    printf("ioctlsocket(FIONBIO) failed with error %d\n", WSAGetLastError());
-                    return 1;
-                }
-                else
-                    printf("ioctlsocket(FIONBIO) is OK!\n");
+                    // Set the accepted socket to non-blocking mode so the server will
+                    // not get caught in a blocked condition on WSASends
+                    NonBlock = 1;
+                    if (ioctlsocket(AcceptSocket, FIONBIO, &NonBlock) == SOCKET_ERROR)
+                    {
+                        printf("ioctlsocket(FIONBIO) failed with error %d\n", WSAGetLastError());
+                        return 1;
+                    }
+                    else
+                        printf("ioctlsocket(FIONBIO) is OK!\n");
 
-                if (CreateSocketInformation(AcceptSocket) == FALSE)
-                {
-                    printf("CreateSocketInformation(AcceptSocket) failed!\n");
-                    return 1;
-                }
-                else
-                    printf("CreateSocketInformation() is OK!\n");
+                    if (CreateSocketInformation(AcceptSocket) == FALSE)
+                    {
+                        printf("CreateSocketInformation(AcceptSocket) failed!\n");
+                        return 1;
+                    }
+                    else
+                        printf("CreateSocketInformation() is OK!\n");
 
-            }
-            else
-            {
-                if (WSAGetLastError() != WSAEWOULDBLOCK)
-                {
-                    printf("accept() failed with error %d\n", WSAGetLastError());
-                    return 1;
                 }
                 else
-                    printf("accept() is fine!\n");
+                {
+                    if (WSAGetLastError() != WSAEWOULDBLOCK)
+                    {
+                        printf("accept() failed with error %d\n", WSAGetLastError());
+                        return 1;
+                    }
+                    else
+                        printf("accept() is fine!\n");
+                }
             }
         }
 
