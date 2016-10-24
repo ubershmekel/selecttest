@@ -2,3 +2,5 @@
 /SelectEfficiency/SocketTest/Debug/SocketTest.tlog/*.lastbuildstate
 /SelectEfficiency/SocketTest/Debug/*.idb
 /SelectEfficiency/*.sdf
+/Echo/CSharpAwaitServer/ListenAwait/obj
+/Echo/CSharpAwaitServer/ListenAwait/bin
