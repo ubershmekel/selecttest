@@ -30,9 +30,9 @@ serversocket.listen(5)
 while True:
     # blocking accept connections from outside
     print('accept')
-    (clientsocket, address) = serversocket.accept()
+    client_socket, address = serversocket.accept()
 
-    # now do something with the clientsocket
+    # now do something with the client_socket
     # in this case, we'll pretend this is a threaded server
-    ct = EchoThread(clientsocket)
+    ct = EchoThread(client_socket)
     ct.run()
