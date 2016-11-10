@@ -3,7 +3,7 @@
 
 #include "stdafx.h"
 
-
+#define FD_SETSIZE 15000
 #include <winsock2.h>
 #include <windows.h>
 #include <stdio.h>
@@ -53,7 +53,7 @@ int SelectCallsPerSecond(int socketCount) {
     DWORD RecvBytes;
 
     std::vector<SOCKET> sockets;
-
+    printf("FDSETSIZE: %d\n", FD_SETSIZE);
     if ((Ret = WSAStartup(0x0202, &wsaData)) != 0)
     {
         printf("WSAStartup() failed with error %d\n", Ret);
@@ -122,14 +122,13 @@ int SelectCallsPerSecond(int socketCount) {
             double duration = get_time() - start;
             printf("Duration: %g\nFor count in cycle: %d\n", duration, cycle);
 
-            // slow down or speed up measuring cycle to reach 1 second duration
+            // slow down or speed up measuring cycle to reach 1+ second duration
             if (duration < 0.95) {
-                cycle = static_cast<int>(cycle * 1.1);
-            } else if (duration > 1.05) {
-                cycle = static_cast<int>(cycle / 1.1);
+                cycle = cycle * 2;// static_cast<int>(cycle * 2.0);
             } else {
-                // the duration is about 1 second. return the cycle count
-                return cycle;
+                // the duration is more than 1 second. return the cycle count per second
+                int roundedSelectsPerSecond = ((double)cycle) / duration;
+                return roundedSelectsPerSecond;
             }
             start = get_time();
         }

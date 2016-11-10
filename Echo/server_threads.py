@@ -11,8 +11,8 @@ class EchoThread(Thread):
     def run(self):
         print('recv')
         line = self.sock.recv(1024)
-        response = str(len(line))
-        print('send "%s"' % response)
+        response = str(len(line)).encode('utf-8')
+        #print('send "%s"' % response)
         self.sock.send(response)
         self.sock.close()
         
@@ -25,7 +25,7 @@ serversocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 serversocket.bind(('localhost', 1234))
 
 # become a server socket, maximum number of queued connections is 5
-serversocket.listen(5)
+serversocket.listen(15)
 
 while True:
     # blocking accept connections from outside

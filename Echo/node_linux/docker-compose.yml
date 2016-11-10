@@ -1,0 +1,6 @@
+version: '2'
+services:
+  noder:
+    build: .
+    ports:
+     - "1234:1234"

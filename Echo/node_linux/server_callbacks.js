@@ -14,6 +14,6 @@ var server = net.createServer((socket) => {
 });
 
 // grab a random port.
-server.listen({host: "localhost", port: 1234}, () => {
-    console.log('opened server on', server.address());
+server.listen({host: "0.0.0.0", port: 1234}, () => {
+    console.log('Opened server on', server.address());
 });

@@ -1,0 +1,6 @@
+version: '2'
+services:
+  pythoneer:
+    build: .
+    ports:
+     - "1234:1234"

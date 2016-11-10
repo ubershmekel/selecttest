@@ -1,0 +1,14 @@
+
+NodeJS Windows cold start
+    0.00102606
+Warm
+    0.000233608
+Docker
+    0.0021537
+    0.00161008
+    0.00123127
+
+
+C# Async Await
+    0.000516104
+
